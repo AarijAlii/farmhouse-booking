@@ -13,6 +13,7 @@ import { SLOTS, isValidDateString, slotIsPast, todayPkt } from "@/lib/slots";
 import { getSettings, paymentInfo, pendingPaymentHours, slotPricePkr } from "@/lib/settings";
 import { supabaseAdmin } from "@/lib/supabase";
 import { clientIp, rateLimit } from "@/lib/ratelimit";
+import { encryptPii } from "@/lib/crypto";
 
 const MAX_DAYS_AHEAD = 90;
 const MAX_BOOKINGS_PER_PHONE_PER_DAY = 3;
@@ -90,7 +91,7 @@ export const POST = handle(async (req) => {
       slot: body.slot,
       customer_name: body.customer_name,
       phone,
-      cnic,
+      cnic: encryptPii(cnic),
       adults: body.adults,
       children: body.children,
       status: "pending_payment",

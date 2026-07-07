@@ -5,6 +5,7 @@ const schema = z.object({
   NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().min(1),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1),
   ADMIN_EMAILS: z.string().min(1),
+  CNIC_ENCRYPTION_KEY: z.string().regex(/^[0-9a-fA-F]{64}$/, "must be 64 hex characters"),
 });
 
 let cached: z.infer<typeof schema> | null = null;
@@ -17,6 +18,7 @@ export function env() {
       NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
       SUPABASE_SERVICE_ROLE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY,
       ADMIN_EMAILS: process.env.ADMIN_EMAILS,
+      CNIC_ENCRYPTION_KEY: process.env.CNIC_ENCRYPTION_KEY,
     });
     if (!parsed.success) {
       throw new Error(

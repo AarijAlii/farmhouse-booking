@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { ApiError, handle } from "@/lib/api";
 import { expireStalePending } from "@/lib/bookings";
 import { requireAdmin, supabaseAdmin } from "@/lib/supabase";
+import { decryptPii } from "@/lib/crypto";
 
 const STATUSES = ["pending_payment", "payment_review", "confirmed", "rejected", "cancelled", "expired"];
 const SIGNED_URL_SECONDS = 600;
@@ -41,7 +42,7 @@ export const GET = handle(async (req) => {
       );
       const rest = { ...b };
       delete rest.payment_proofs;
-      return { ...rest, proofs };
+      return { ...rest, cnic: decryptPii(b.cnic), proofs };
     })
   );
 

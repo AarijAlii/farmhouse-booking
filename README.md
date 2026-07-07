@@ -40,7 +40,9 @@ pending_payment ── screenshot uploaded ──> payment_review ── admin �
 - Admin routes require a Supabase Auth token **and** an email allowlist (`ADMIN_EMAILS`).
 - Screenshots: magic-byte sniffed (content must really be JPEG/PNG/WebP), 5 MB cap,
   max 3 per booking, stored in a private bucket, served to admins via 10-minute signed URLs.
-- CNIC and phone are never returned by public endpoints.
+- CNIC and phone are never returned by public endpoints. CNIC is additionally encrypted at
+  the application level (AES-256-GCM, key in `CNIC_ENCRYPTION_KEY`) before it reaches the
+  database — dashboard access or a leaked backup reveals only ciphertext.
 - Abuse caps in the database (survive serverless restarts): one pending booking per phone,
   max 3 bookings per phone per day. Per-IP rate limits on all public mutating endpoints.
 - Strict input validation (zod, `.strict()` — unknown fields rejected), normalized phone/CNIC.
