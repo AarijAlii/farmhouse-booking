@@ -47,5 +47,10 @@ export const GET = handle(async (req) => {
     return { date, slots };
   });
 
-  return NextResponse.json({ month, days });
+  return NextResponse.json(
+    { month, days },
+    // Tiny edge cache: keeps a burst of visitors from hammering the database
+    // while staying fresh enough for a booking calendar.
+    { headers: { "Cache-Control": "public, s-maxage=15, stale-while-revalidate=30" } }
+  );
 });

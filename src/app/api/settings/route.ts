@@ -9,5 +9,9 @@ export const GET = handle(async () => {
   const publicSettings = Object.fromEntries(
     PUBLIC_SETTING_KEYS.filter((k) => k in settings).map((k) => [k, settings[k]])
   );
-  return NextResponse.json({ settings: publicSettings, slot_labels: SLOT_LABELS });
+  return NextResponse.json(
+    { settings: publicSettings, slot_labels: SLOT_LABELS },
+    // Prices/payment info change rarely; let Vercel's edge absorb repeat traffic.
+    { headers: { "Cache-Control": "public, s-maxage=300, stale-while-revalidate=600" } }
+  );
 });

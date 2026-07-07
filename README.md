@@ -11,6 +11,10 @@ Booking system for a single farmhouse with three daily slots (Pakistan time):
 Customers book a slot, pay via JazzCash (manual transfer — no payment gateway), and upload a
 receipt screenshot. An admin reviews the screenshot and confirms or rejects the booking.
 
+Customers do **not** sign up. The booking form collects name, phone, CNIC, adults, and
+children; afterwards the customer tracks their booking with a reference code + phone number.
+The only account in the system is the owner/admin login (Supabase Auth).
+
 ## Stack
 
 - **Next.js (App Router, TypeScript)** — frontend and API routes in one app, deployed on Vercel
@@ -27,6 +31,20 @@ pending_payment ── screenshot uploaded ──> payment_review ── admin �
       │                                                                    │
       └── payment window passes ──> expired                confirmed ── admin ──> cancelled
 ```
+
+## Security measures
+
+- RLS enabled with zero policies: the browser-side anon key can touch nothing; all data
+  access goes through API routes using the server-only service-role key.
+- Double-booking prevented by the database (partial unique index), not application logic.
+- Admin routes require a Supabase Auth token **and** an email allowlist (`ADMIN_EMAILS`).
+- Screenshots: magic-byte sniffed (content must really be JPEG/PNG/WebP), 5 MB cap,
+  max 3 per booking, stored in a private bucket, served to admins via 10-minute signed URLs.
+- CNIC and phone are never returned by public endpoints.
+- Abuse caps in the database (survive serverless restarts): one pending booking per phone,
+  max 3 bookings per phone per day. Per-IP rate limits on all public mutating endpoints.
+- Strict input validation (zod, `.strict()` — unknown fields rejected), normalized phone/CNIC.
+- Security headers: HSTS, nosniff, frame denial, restrictive permissions policy.
 
 ## Local setup
 

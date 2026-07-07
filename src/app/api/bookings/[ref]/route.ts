@@ -2,9 +2,12 @@ import { NextResponse } from "next/server";
 import { ApiError, handle } from "@/lib/api";
 import { expireStalePending, findByRefAndPhone, normalizePhone, publicBooking } from "@/lib/bookings";
 import { getSettings, paymentInfo } from "@/lib/settings";
+import { clientIp, rateLimit } from "@/lib/ratelimit";
 
 // Customer checks their booking with reference code + phone (no accounts needed).
 export const GET = handle(async (req, ctx: { params: Promise<{ ref: string }> }) => {
+  rateLimit("booking-lookup", clientIp(req), 60, 60 * 60 * 1000);
+
   const { ref } = await ctx.params;
   const rawPhone = new URL(req.url).searchParams.get("phone");
   if (!rawPhone) throw new ApiError(400, "Query param 'phone' is required");

@@ -12,7 +12,9 @@ export interface Booking {
   slot: Slot;
   customer_name: string;
   phone: string;
-  guests: number | null;
+  adults: number;
+  children: number;
+  cnic: string;
   status: string;
   amount_pkr: number | null;
   expires_at: string | null;
@@ -36,6 +38,14 @@ export function normalizePhone(input: string): string {
   const m = digits.match(/^(?:\+?92|0)(3\d{9})$/);
   if (!m) throw new ApiError(400, "Phone must be a Pakistani mobile number, e.g. 03001234567");
   return `0${m[1]}`;
+}
+
+// Normalize CNIC to the canonical #####-#######-# form. Sensitive PII —
+// stored for the owner's records only, never returned by public endpoints.
+export function normalizeCnic(input: string): string {
+  const m = input.replace(/[\s]/g, "").match(/^(\d{5})-?(\d{7})-?(\d)$/);
+  if (!m) throw new ApiError(400, "CNIC must be 13 digits, e.g. 12345-1234567-1");
+  return `${m[1]}-${m[2]}-${m[3]}`;
 }
 
 // Lazy expiry: release slots held by pending bookings whose payment window has passed.
@@ -63,14 +73,15 @@ export async function findByRefAndPhone(ref: string, phone: string): Promise<Boo
   return data as Booking;
 }
 
-// Fields safe to return to the customer.
+// Fields safe to return to the customer. Deliberately excludes cnic and phone.
 export function publicBooking(b: Booking) {
   return {
     ref: b.ref,
     booking_date: b.booking_date,
     slot: b.slot,
     customer_name: b.customer_name,
-    guests: b.guests,
+    adults: b.adults,
+    children: b.children,
     status: b.status,
     amount_pkr: b.amount_pkr,
     expires_at: b.expires_at,
