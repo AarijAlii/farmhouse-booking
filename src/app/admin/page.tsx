@@ -25,6 +25,7 @@ import {
   SkeletonList,
   SLOT_LABELS_UI,
   SLOT_TIMES_UI,
+  blockCustomer,
   formatDateLong,
   formatPkr,
 } from "./ui";
@@ -80,7 +81,17 @@ function ReviewCard({ booking, onDecided }: { booking: AdminBooking; onDecided: 
         <div className="flex items-center gap-3">
           <Avatar name={booking.customer_name} />
           <div>
-            <p className="text-[15px] font-semibold text-slate-900">{booking.customer_name}</p>
+            <p className="flex items-center gap-2 text-[15px] font-semibold text-slate-900">
+              {booking.customer_name}
+              {booking.strikes > 0 && (
+                <span
+                  title="Previously expired or rejected bookings from this phone in the last 30 days"
+                  className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700 ring-1 ring-inset ring-amber-600/20"
+                >
+                  ⚠ {booking.strikes} previous no-show{booking.strikes > 1 ? "s" : ""}
+                </span>
+              )}
+            </p>
             <p className="text-[13px] text-slate-500">
               {formatDateLong(booking.booking_date)} · {SLOT_LABELS_UI[booking.slot]} (
               {SLOT_TIMES_UI[booking.slot]})
@@ -155,9 +166,22 @@ function ReviewCard({ booking, onDecided }: { booking: AdminBooking; onDecided: 
                 placeholder="e.g. No payment with this amount arrived in JazzCash"
                 className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-rose-400 focus:ring-4 focus:ring-rose-500/10"
               />
-              <div className="mt-3 flex gap-2.5">
+              <div className="mt-3 flex flex-wrap gap-2.5">
                 <Button variant="danger" loading={busy === "reject"} onClick={() => decide("reject")}>
                   Yes, reject this booking
+                </Button>
+                <Button
+                  variant="outline-danger"
+                  disabled={busy !== null}
+                  onClick={async () => {
+                    try {
+                      if (await blockCustomer(adminFetch, booking)) await decide("reject");
+                    } catch (err) {
+                      setError(err instanceof Error ? err.message : "Could not block");
+                    }
+                  }}
+                >
+                  Reject & block customer
                 </Button>
                 <Button variant="ghost" disabled={busy !== null} onClick={() => setRejecting(false)}>
                   Go back

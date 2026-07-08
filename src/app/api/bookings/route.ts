@@ -10,10 +10,12 @@ import {
   type Booking,
 } from "@/lib/bookings";
 import { SLOTS, isValidDateString, slotIsPast, todayPkt } from "@/lib/slots";
-import { getSettings, paymentInfo, pendingPaymentHours, slotPricePkr } from "@/lib/settings";
+import { getSettings, paymentInfo, pendingPaymentHours } from "@/lib/settings";
 import { supabaseAdmin } from "@/lib/supabase";
 import { clientIp, rateLimit } from "@/lib/ratelimit";
 import { encryptPii } from "@/lib/crypto";
+import { assertNotBlocked, assertNotOnCooldown, cnicFingerprint } from "@/lib/abuse";
+import { fetchOverrides, resolvePrice } from "@/lib/pricing";
 
 const MAX_DAYS_AHEAD = 90;
 const MAX_BOOKINGS_PER_PHONE_PER_DAY = 3;
@@ -36,6 +38,11 @@ export const POST = handle(async (req) => {
   const body = bodySchema.parse(await readJson(req));
   const phone = normalizePhone(body.phone);
   const cnic = normalizeCnic(body.cnic);
+  const cnicHash = cnicFingerprint(cnic);
+
+  // Owner blocklist and repeat-no-show cool-down, before anything else.
+  await assertNotBlocked(phone, cnicHash);
+  await assertNotOnCooldown(phone, cnicHash);
 
   if (slotIsPast(body.booking_date, body.slot)) {
     throw new ApiError(400, "That slot is already in the past");
@@ -80,7 +87,8 @@ export const POST = handle(async (req) => {
   }
 
   const settings = await getSettings();
-  const amount = slotPricePkr(settings, body.slot);
+  const overrides = await fetchOverrides(body.booking_date, body.booking_date);
+  const amount = resolvePrice(settings, overrides, body.booking_date, body.slot);
   const expiresAt = new Date(Date.now() + pendingPaymentHours(settings) * 3600_000).toISOString();
 
   const { data, error } = await db
@@ -92,6 +100,7 @@ export const POST = handle(async (req) => {
       customer_name: body.customer_name,
       phone,
       cnic: encryptPii(cnic),
+      cnic_hash: cnicHash,
       adults: body.adults,
       children: body.children,
       status: "pending_payment",

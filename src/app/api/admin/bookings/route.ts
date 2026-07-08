@@ -3,6 +3,7 @@ import { ApiError, handle } from "@/lib/api";
 import { expireStalePending } from "@/lib/bookings";
 import { requireAdmin, supabaseAdmin } from "@/lib/supabase";
 import { decryptPii } from "@/lib/crypto";
+import { strikeCounts } from "@/lib/abuse";
 
 const STATUSES = ["pending_payment", "payment_review", "confirmed", "rejected", "cancelled", "expired"];
 const SIGNED_URL_SECONDS = 600;
@@ -30,6 +31,9 @@ export const GET = handle(async (req) => {
   const { data, error } = await query;
   if (error) throw new ApiError(500, "Could not load bookings");
 
+  // Warn the owner about repeat no-shows (expired/rejected in the last 30 days).
+  const strikes = await strikeCounts([...new Set((data ?? []).map((b) => b.phone as string))]);
+
   const bookings = await Promise.all(
     (data ?? []).map(async (b) => {
       const proofs = await Promise.all(
@@ -42,7 +46,8 @@ export const GET = handle(async (req) => {
       );
       const rest = { ...b };
       delete rest.payment_proofs;
-      return { ...rest, cnic: decryptPii(b.cnic), proofs };
+      delete rest.cnic_hash;
+      return { ...rest, cnic: decryptPii(b.cnic), proofs, strikes: strikes[b.phone] ?? 0 };
     })
   );
 

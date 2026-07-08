@@ -3,6 +3,8 @@ import { ApiError, handle } from "@/lib/api";
 import { ACTIVE_STATUSES, expireStalePending } from "@/lib/bookings";
 import { SLOTS, type Slot, slotIsPast } from "@/lib/slots";
 import { supabaseAdmin } from "@/lib/supabase";
+import { getSettings } from "@/lib/settings";
+import { fetchOverrides, pricesForDate } from "@/lib/pricing";
 
 type SlotStatus = "available" | "booked" | "blocked" | "past";
 
@@ -20,7 +22,7 @@ export const GET = handle(async (req) => {
   await expireStalePending();
 
   const db = supabaseAdmin();
-  const [bookings, blocks] = await Promise.all([
+  const [bookings, blocks, settings, overrides] = await Promise.all([
     db
       .from("bookings")
       .select("booking_date, slot")
@@ -28,6 +30,8 @@ export const GET = handle(async (req) => {
       .lte("booking_date", last)
       .in("status", [...ACTIVE_STATUSES]),
     db.from("slot_blocks").select("block_date, slot").gte("block_date", first).lte("block_date", last),
+    getSettings(),
+    fetchOverrides(first, last),
   ]);
   if (bookings.error || blocks.error) throw new ApiError(500, "Could not load availability");
 
@@ -44,7 +48,7 @@ export const GET = handle(async (req) => {
       else if (booked.has(`${date}|${slot}`)) slots[slot] = "booked";
       else slots[slot] = "available";
     }
-    return { date, slots };
+    return { date, slots, prices: pricesForDate(settings, overrides, date) };
   });
 
   return NextResponse.json(

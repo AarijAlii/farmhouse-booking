@@ -3,10 +3,20 @@
 import { useEffect, useState } from "react";
 import { ChevronLeft, ChevronRight, Lock, LockOpen, Moon, Sun, Sunrise } from "lucide-react";
 import { adminFetch } from "@/lib/admin-client";
-import { Button, Card, ErrorBanner, PageHeader, SLOT_LABELS_UI, SLOT_TIMES_UI, formatDateLong } from "../ui";
+import {
+  Button,
+  Card,
+  ErrorBanner,
+  INPUT_CLASS,
+  PageHeader,
+  SLOT_LABELS_UI,
+  SLOT_TIMES_UI,
+  formatDateLong,
+  formatPkr,
+} from "../ui";
 
 type SlotStatus = "available" | "booked" | "blocked" | "past";
-type Day = { date: string; slots: Record<string, SlotStatus> };
+type Day = { date: string; slots: Record<string, SlotStatus>; prices: Record<string, number> };
 
 const SLOT_ORDER = ["morning", "afternoon", "evening"] as const;
 const SLOT_ICONS = { morning: Sunrise, afternoon: Sun, evening: Moon };
@@ -36,6 +46,9 @@ export default function CalendarPage() {
   const [error, setError] = useState("");
   const [busySlot, setBusySlot] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
+  const [overrides, setOverrides] = useState<Set<string>>(new Set());
+  const [editingPrice, setEditingPrice] = useState<string | null>(null);
+  const [priceInput, setPriceInput] = useState("");
 
   const month = monthString(monthDate);
   const today = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Karachi" });
@@ -44,11 +57,17 @@ export default function CalendarPage() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`/api/availability?month=${month}`);
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error ?? "Could not load the calendar");
+        const [availRes, ovr] = await Promise.all([
+          fetch(`/api/availability?month=${month}`),
+          adminFetch<{ overrides: { price_date: string; slot: string }[] }>(
+            `/api/admin/price-overrides?month=${month}`
+          ),
+        ]);
+        const data = await availRes.json();
+        if (!availRes.ok) throw new Error(data.error ?? "Could not load the calendar");
         if (!cancelled) {
           setDays(data.days);
+          setOverrides(new Set(ovr.overrides.map((o) => `${o.price_date}|${o.slot}`)));
           setError("");
           setSelected((prev) => (prev ? data.days.find((d: Day) => d.date === prev.date) ?? null : null));
         }
@@ -63,6 +82,23 @@ export default function CalendarPage() {
       cancelled = true;
     };
   }, [month, refreshKey]);
+
+  async function saveSpecialPrice(date: string, slot: string, price: number | null) {
+    setBusySlot(`price:${date}|${slot}`);
+    setError("");
+    try {
+      await adminFetch("/api/admin/price-overrides", {
+        method: "POST",
+        body: JSON.stringify({ date, slot, price_pkr: price }),
+      });
+      setEditingPrice(null);
+      setPriceInput("");
+      setRefreshKey((k) => k + 1);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save the price");
+    }
+    setBusySlot("");
+  }
 
   async function toggleBlock(day: Day, slot: string, currently: SlotStatus) {
     setBusySlot(`${day.date}|${slot}`);
@@ -193,6 +229,9 @@ export default function CalendarPage() {
               {SLOT_ORDER.map((slot) => {
                 const st = selected.slots[slot];
                 const busy = busySlot === `${selected.date}|${slot}`;
+                const priceBusy = busySlot === `price:${selected.date}|${slot}`;
+                const hasOverride = overrides.has(`${selected.date}|${slot}`);
+                const editing = editingPrice === `${selected.date}|${slot}`;
                 const Icon = SLOT_ICONS[slot];
                 return (
                   <div key={slot} className="rounded-xl p-4 ring-1 ring-slate-200/80">
@@ -207,6 +246,71 @@ export default function CalendarPage() {
                       <span className={`h-2 w-2 shrink-0 rounded-full ${DOT_COLORS[st]}`} />
                     </div>
                     <p className="mt-2.5 text-[13px] text-slate-500">{STATUS_TEXT[st]}</p>
+
+                    <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 rounded-lg bg-slate-50 px-3 py-2">
+                      <p className="text-[13px] text-slate-600">
+                        Price:{" "}
+                        <span className="font-semibold tabular-nums text-slate-900">
+                          {formatPkr(selected.prices?.[slot] ?? null)}
+                        </span>
+                        {hasOverride && (
+                          <span className="ml-1.5 rounded-full bg-indigo-50 px-2 py-0.5 text-[11px] font-semibold text-indigo-700 ring-1 ring-inset ring-indigo-600/20">
+                            special
+                          </span>
+                        )}
+                      </p>
+                      {!editing ? (
+                        <span className="flex gap-2">
+                          <button
+                            onClick={() => {
+                              setEditingPrice(`${selected.date}|${slot}`);
+                              setPriceInput(String(selected.prices?.[slot] ?? ""));
+                            }}
+                            className="text-[12.5px] font-medium text-indigo-600 hover:underline"
+                          >
+                            {hasOverride ? "Change" : "Set special price"}
+                          </button>
+                          {hasOverride && (
+                            <button
+                              disabled={priceBusy}
+                              onClick={() => saveSpecialPrice(selected.date, slot, null)}
+                              className="text-[12.5px] font-medium text-slate-500 hover:underline"
+                            >
+                              Clear
+                            </button>
+                          )}
+                        </span>
+                      ) : (
+                        <span className="flex w-full items-center gap-2">
+                          <input
+                            type="number"
+                            min={1}
+                            value={priceInput}
+                            onChange={(e) => setPriceInput(e.target.value)}
+                            className={`${INPUT_CLASS} !w-28 !py-1.5 tabular-nums`}
+                            placeholder="Rs"
+                          />
+                          <Button
+                            loading={priceBusy}
+                            onClick={() => {
+                              const n = Number(priceInput);
+                              if (Number.isFinite(n) && n > 0) saveSpecialPrice(selected.date, slot, Math.round(n));
+                            }}
+                            className="!px-3 !py-1.5"
+                          >
+                            Save
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            disabled={priceBusy}
+                            onClick={() => setEditingPrice(null)}
+                            className="!px-2.5 !py-1.5"
+                          >
+                            Cancel
+                          </Button>
+                        </span>
+                      )}
+                    </div>
                     {st === "available" && (
                       <Button
                         variant="outline-danger"

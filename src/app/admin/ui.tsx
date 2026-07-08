@@ -235,4 +235,22 @@ export interface AdminBooking {
   admin_note: string | null;
   created_at: string;
   proofs: { id: number; mime_type: string; uploaded_at: string; url: string | null }[];
+  strikes: number;
+}
+
+// Shared "block this customer" action for review cards and booking rows.
+export async function blockCustomer(
+  adminFetch: <T>(path: string, init?: RequestInit) => Promise<T>,
+  booking: { id: number; customer_name: string; phone: string }
+): Promise<boolean> {
+  const reason = window.prompt(
+    `Block ${booking.customer_name} (${booking.phone}) from making online bookings?\n\nOptional: note a reason, then press OK.`,
+    ""
+  );
+  if (reason === null) return false;
+  await adminFetch("/api/admin/blocked", {
+    method: "POST",
+    body: JSON.stringify({ booking_id: booking.id, ...(reason.trim() ? { reason: reason.trim() } : {}) }),
+  });
+  return true;
 }

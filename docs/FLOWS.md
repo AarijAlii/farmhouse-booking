@@ -84,7 +84,7 @@ On submit, the system:
 1. Validates every field (unknown/extra fields are rejected outright).
 2. Checks the slot isn't past, blocked, or already taken.
 3. Creates the booking as `pending_payment` and **holds the slot**.
-4. Sets a payment deadline (default **3 hours**, configurable by the admin).
+4. Sets a payment deadline (default **1 hour**, configurable by the admin).
 5. Returns the **reference code**, the **amount** (price is per-slot, set by the admin),
    and the **JazzCash payment details** (account name, number, instructions).
 
@@ -121,6 +121,10 @@ What the customer never sees returned: their CNIC or phone (kept server-side onl
 When the payment deadline passes, the booking flips to `expired` automatically and the
 slot opens up again. (This happens lazily — the system re-checks whenever anyone looks
 at availability or books — so no background jobs are needed.)
+
+Repeat offenders are handled automatically: a phone number or CNIC with **2 or more
+expired/rejected bookings in the last 7 days** cannot hold new slots online — they're
+told to call the owner instead. The owner can also block any customer permanently.
 
 ## Admin (owner) flows
 
@@ -163,16 +167,29 @@ decided explicitly (confirm/reject/cancel), so nobody's booking silently disappe
 
 ### 4. Prices and payment details
 
-The admin can change at any time:
+Pricing has three layers; the most specific one wins:
 
-- `price_morning_pkr`, `price_afternoon_pkr`, `price_evening_pkr` — per-slot prices
-- `jazzcash_name`, `jazzcash_number`, `payment_instructions` — what customers are shown
-- `pending_payment_hours` — how long customers get to pay before expiry
+1. **Base prices** per slot (Mon–Fri) — Settings page
+2. **Weekend prices** per slot (Sat & Sun) — Settings page
+3. **Special-date prices** (Eid, holidays) — set per slot on any date from the Calendar page
 
-Price changes affect **new** bookings only; an existing booking keeps the amount it was
-created with.
+The customer calendar always shows the effective price for the exact date; the server
+recomputes it at booking time, so prices can't be tampered with. Price changes affect
+**new** bookings only; an existing booking keeps the amount it was created with.
 
-*Endpoints: `GET /api/admin/settings`, `PUT /api/admin/settings`*
+The admin can also change `jazzcash_name`, `jazzcash_number`, `payment_instructions`
+(what customers see) and `pending_payment_hours` (the payment window).
+
+*Endpoints: `GET/PUT /api/admin/settings`, `GET/POST /api/admin/price-overrides`*
+
+### 5. Blocking customers
+
+From any booking's details (or the review queue), the admin can **block a customer** —
+their phone and CNIC fingerprint can no longer make online bookings. Blocked numbers
+are listed (and unblockable) on the Settings page. Review cards warn when a customer
+has recent expired/rejected bookings.
+
+*Endpoints: `GET/POST/DELETE /api/admin/blocked`*
 
 ## Abuse protection (what the system enforces automatically)
 
@@ -181,6 +198,8 @@ created with.
 | Double booking a slot                       | Unique index in the database — physically impossible              |
 | Holding slots without paying                | Payment deadline + automatic expiry                               |
 | One person mass-holding slots               | 1 pending booking per phone at a time; max 3 bookings/phone/day   |
+| Repeatedly booking without paying           | Auto cool-down: 2+ expired/rejected in 7 days → online booking barred |
+| Known troublemaker                          | Owner blocklist by phone + CNIC fingerprint (settings page)       |
 | Flooding the API                            | Per-IP rate limits on booking, upload, and lookup endpoints       |
 | Uploading malware disguised as a screenshot | Byte-level image verification; only real JPEG/PNG/WebP accepted   |
 | Storage abuse via uploads                   | 5 MB per file, max 3 files per booking, private bucket            |
@@ -197,3 +216,6 @@ created with.
 | Phone               | `bookings` table                   | Admin only (customer proves it, never reads it) |
 | CNIC                | `bookings` table, **encrypted**    | Admin only, decrypted on demand      |
 | Payment screenshots | Private storage bucket             | Admin only, via 10-minute signed URLs |
+
+Payment screenshots are deleted automatically **7 days after the booked visit date**
+(daily cleanup job). Booking records are kept; only the images are removed.

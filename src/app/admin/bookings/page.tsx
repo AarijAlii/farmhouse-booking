@@ -16,6 +16,7 @@ import {
   SLOT_LABELS_UI,
   SLOT_TIMES_UI,
   StatusBadge,
+  blockCustomer,
   formatDate,
   formatPkr,
 } from "../ui";
@@ -108,13 +109,32 @@ function DetailPanel({ booking, onChanged }: { booking: AdminBooking; onChanged:
 
       <ErrorBanner message={error} />
 
-      {cancellable && (
-        <div className="mt-4">
+      {booking.strikes > 0 && (
+        <p className="mt-4 inline-flex items-center rounded-full bg-amber-50 px-3 py-1 text-[12px] font-semibold text-amber-700 ring-1 ring-inset ring-amber-600/20">
+          ⚠ {booking.strikes} expired/rejected booking{booking.strikes > 1 ? "s" : ""} from this phone in the last 30 days
+        </p>
+      )}
+
+      <div className="mt-4 flex flex-wrap gap-2.5">
+        {cancellable && (
           <Button variant="outline-danger" loading={busy} onClick={cancel}>
             Cancel this booking
           </Button>
-        </div>
-      )}
+        )}
+        <Button
+          variant="outline"
+          disabled={busy}
+          onClick={async () => {
+            try {
+              if (await blockCustomer(adminFetch, booking)) onChanged();
+            } catch (err) {
+              setError(err instanceof Error ? err.message : "Could not block");
+            }
+          }}
+        >
+          Block customer
+        </Button>
+      </div>
     </div>
   );
 }

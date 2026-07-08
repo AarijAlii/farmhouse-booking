@@ -19,7 +19,7 @@ import { SLOT_KEYS, SLOT_META, type SlotKey, formatPkr } from "../site-ui";
 import { UploadProof } from "../upload-proof";
 
 type SlotStatus = "available" | "booked" | "blocked" | "past";
-type Day = { date: string; slots: Record<SlotKey, SlotStatus> };
+type Day = { date: string; slots: Record<SlotKey, SlotStatus>; prices: Record<SlotKey, number> };
 
 interface BookingResult {
   booking: {
@@ -76,7 +76,6 @@ function BookWizard() {
   const [step, setStep] = useState(0);
   const [monthDate, setMonthDate] = useState(() => new Date());
   const [days, setDays] = useState<Day[] | null>(null);
-  const [settings, setSettings] = useState<Record<string, string>>({});
   const [date, setDate] = useState<string | null>(null);
   const [slot, setSlot] = useState<SlotKey | null>(preferredSlot);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -88,19 +87,6 @@ function BookWizard() {
   const [copied, setCopied] = useState(false);
 
   const month = monthString(monthDate);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/settings")
-      .then((r) => r.json())
-      .then((d) => {
-        if (!cancelled) setSettings(d.settings ?? {});
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -119,7 +105,7 @@ function BookWizard() {
   }, [month, refreshKey]);
 
   const selectedDay = useMemo(() => days?.find((d) => d.date === date) ?? null, [days, date]);
-  const price = slot ? settings[SLOT_META[slot].priceKey] : null;
+  const price = slot && selectedDay ? selectedDay.prices[slot] : null;
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -300,7 +286,7 @@ function BookWizard() {
                       </p>
                       <p className={`text-[12px] ${active ? "text-emerald-200" : "text-stone-400"}`}>{meta.time}</p>
                       <p className={`mt-2 text-[14px] font-semibold ${active ? "text-white" : "text-emerald-900"}`}>
-                        {open ? formatPkr(settings[meta.priceKey]) : st === "past" ? "Passed" : "Unavailable"}
+                        {open ? formatPkr(selectedDay.prices[key]) : st === "past" ? "Passed" : "Unavailable"}
                       </p>
                     </button>
                   );

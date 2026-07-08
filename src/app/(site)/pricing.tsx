@@ -49,6 +49,15 @@ export function PricingCards() {
                   / whole farm
                 </span>
               </p>
+              {settings !== null &&
+                (() => {
+                  const weekend = settings[`price_${key}_weekend_pkr`];
+                  return weekend && Number(weekend) !== Number(price) ? (
+                    <p className="mt-1 text-[12.5px] font-medium text-stone-500">
+                      Weekends: {formatPkr(weekend)}
+                    </p>
+                  ) : null;
+                })()}
               <Link
                 href={`/book?slot=${key}`}
                 className="mt-4 inline-flex items-center gap-1.5 text-[14.5px] font-medium text-emerald-800 transition-colors hover:text-emerald-950"
