@@ -6,8 +6,9 @@ import { Menu, TreePine, X } from "lucide-react";
 import { BRAND } from "./site-ui";
 
 const LINKS = [
-  { href: "/#farm", label: "The farm" },
+  { href: "/#activities", label: "Activities" },
   { href: "/#slots", label: "Slots & prices" },
+  { href: "/#policies", label: "Policies" },
   { href: "/#how", label: "How it works" },
   { href: "/booking", label: "Find my booking" },
 ];

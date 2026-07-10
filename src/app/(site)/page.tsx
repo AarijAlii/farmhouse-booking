@@ -3,8 +3,8 @@ import {
   CircleCheck,
   Flame,
   HeartHandshake,
-  Image as ImageIcon,
   MessageSquareText,
+  ScrollText,
   ShieldCheck,
   Sofa,
   Trees,
@@ -12,7 +12,7 @@ import {
   Users,
   Waves,
 } from "lucide-react";
-import { BRAND, BRAND_CITY, CtaButton, Img, SectionHeading } from "./site-ui";
+import { ACTIVITIES, BRAND, BRAND_CITY, CtaButton, Img, POLICIES, SectionHeading } from "./site-ui";
 import { PricingCards } from "./pricing";
 
 const HERO_IMG =
@@ -22,14 +22,6 @@ const FARM_IMGS = [
   "https://images.unsplash.com/photo-1416331108676-a22ccb276e35?auto=format&fit=crop&w=900&q=80",
   "https://images.unsplash.com/photo-1470770841072-f978cf4d019e?auto=format&fit=crop&w=900&q=80",
 ];
-const GALLERY_IMGS = [
-  "https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=900&q=80",
-  "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?auto=format&fit=crop&w=900&q=80",
-  "https://images.unsplash.com/photo-1564013799919-ab600027ffc6?auto=format&fit=crop&w=900&q=80",
-  "https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=900&q=80",
-  "https://images.unsplash.com/photo-1504280390367-361c6d9f38f4?auto=format&fit=crop&w=900&q=80",
-];
-
 const FEATURES = [
   { icon: Users, title: "Families only", copy: "Reserved exclusively for family groups — always." },
   { icon: Trees, title: "Open green lawns", copy: "Room to run, play cricket, or do nothing at all." },
@@ -76,6 +68,10 @@ export default function HomePage() {
         <div className="relative mx-auto max-w-3xl px-6 py-28 text-center text-white">
           <p className="text-[13px] font-semibold uppercase tracking-[0.28em] text-emerald-200">
             {BRAND} · {BRAND_CITY}
+          </p>
+          <p className="mx-auto mt-4 inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-1.5 text-[12.5px] font-bold uppercase tracking-[0.22em] text-white ring-1 ring-white/30 backdrop-blur-sm">
+            <Users className="h-4 w-4" aria-hidden="true" />
+            Strictly families only
           </p>
           <h1 className="font-display mt-5 text-5xl leading-[1.05] sm:text-6xl md:text-7xl">
             Slow mornings.
@@ -153,21 +149,56 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Gallery */}
-      <section className="mx-auto max-w-6xl px-5 py-24 sm:px-8">
-        <div className="mb-10 flex items-end justify-between gap-6">
-          <SectionHeading eyebrow="Gallery" title="A glimpse of the place" />
-          <ImageIcon className="mb-2 hidden h-6 w-6 text-stone-300 sm:block" />
-        </div>
-        <div className="flex snap-x gap-4 overflow-x-auto pb-4 [scrollbar-width:thin]">
-          {GALLERY_IMGS.map((src, i) => (
-            <Img
-              key={i}
-              src={src}
-              alt="Farmhouse gallery"
-              className="h-72 w-[300px] shrink-0 snap-start rounded-3xl object-cover sm:w-[360px]"
-            />
+      {/* Activities */}
+      <section id="activities" className="mx-auto max-w-6xl scroll-mt-24 px-5 py-24 sm:px-8">
+        <SectionHeading
+          center
+          eyebrow="Activities"
+          title="A full day of things to do"
+          copy="Everything below is included with your booking unless marked as an add-on. From the pool at noon to disco lights at night — bring the whole family."
+        />
+        <div className="mt-12 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+          {ACTIVITIES.map((a) => (
+            <div key={a.name} className="group relative h-44 overflow-hidden rounded-3xl sm:h-52">
+              <Img
+                src={a.img}
+                alt={a.name}
+                className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-stone-950/75 via-stone-950/10 to-transparent" />
+              <div className="absolute inset-x-0 bottom-0 p-4">
+                <p className="text-[15px] font-semibold text-white">{a.name}</p>
+                {a.note && <p className="mt-0.5 text-[11.5px] font-medium text-amber-200">{a.note}</p>}
+              </div>
+            </div>
           ))}
+        </div>
+      </section>
+
+      {/* Policies */}
+      <section id="policies" className="scroll-mt-24 border-t border-stone-200/70 bg-[#F4F0E6]">
+        <div className="mx-auto max-w-6xl px-5 py-24 sm:px-8">
+          <div className="mb-12 flex items-end justify-between gap-6">
+            <SectionHeading
+              eyebrow="House rules"
+              title="Our policies, in plain words"
+              copy="You'll accept these when you book — reading them now saves surprises later."
+            />
+            <ScrollText className="mb-2 hidden h-6 w-6 text-stone-300 sm:block" />
+          </div>
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {POLICIES.map((p, i) => (
+              <div key={p.title} className={`rounded-3xl p-6 ${i === 0 ? "bg-emerald-950 text-emerald-50" : "border border-stone-200/80 bg-white"}`}>
+                <p className={`text-[15px] font-semibold ${i === 0 ? "text-white" : "text-stone-900"}`}>
+                  {i === 0 ? "🚫 " : ""}
+                  {p.title}
+                </p>
+                <p className={`mt-2 text-[13.5px] leading-relaxed ${i === 0 ? "text-emerald-100/85" : "text-stone-500"}`}>
+                  {p.body}
+                </p>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 

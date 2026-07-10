@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CircleCheck, Clock3, ShieldBan, Wallet2 } from "lucide-react";
+import { CircleCheck, Clock3, Plus, ShieldBan, Trash2, UtensilsCrossed, Wallet2 } from "lucide-react";
 import { adminFetch } from "@/lib/admin-client";
 import { Button, Card, ErrorBanner, Field, INPUT_CLASS, PageHeader, SkeletonList } from "../ui";
 
@@ -121,6 +121,94 @@ function BlockedCustomersCard() {
   );
 }
 
+interface MenuItem {
+  id: string;
+  name: string;
+  price_pkr: number;
+}
+
+function parseMenu(json: string | undefined): MenuItem[] {
+  try {
+    const raw = JSON.parse(json ?? "[]");
+    return Array.isArray(raw) ? raw.filter((i) => i && i.id && i.name) : [];
+  } catch {
+    return [];
+  }
+}
+
+// Owner-friendly editor for the food_menu setting (stored as JSON).
+function FoodMenuEditor({
+  json,
+  onChange,
+}: {
+  json: string | undefined;
+  onChange: (json: string) => void;
+}) {
+  const items = parseMenu(json);
+
+  function update(next: MenuItem[]) {
+    onChange(JSON.stringify(next));
+  }
+
+  return (
+    <div>
+      <div className="space-y-2.5">
+        {items.map((item, idx) => (
+          <div key={idx} className="flex items-center gap-2.5">
+            <input
+              value={item.name}
+              onChange={(e) => {
+                const next = [...items];
+                next[idx] = { ...item, name: e.target.value };
+                update(next);
+              }}
+              placeholder="Dish name (e.g. Chicken biryani, per head)"
+              className={`${INPUT_CLASS} flex-1`}
+            />
+            <div className="relative w-32">
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400">
+                Rs
+              </span>
+              <input
+                type="number"
+                min={1}
+                value={item.price_pkr || ""}
+                onChange={(e) => {
+                  const next = [...items];
+                  next[idx] = { ...item, price_pkr: Number(e.target.value) };
+                  update(next);
+                }}
+                className={`${INPUT_CLASS} !pl-10 tabular-nums`}
+              />
+            </div>
+            <button
+              onClick={() => update(items.filter((_, i) => i !== idx))}
+              className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-rose-50 hover:text-rose-600"
+              title="Remove item"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
+        ))}
+      </div>
+      <Button
+        variant="outline"
+        className="mt-3"
+        onClick={() =>
+          update([...items, { id: `item-${Date.now().toString(36)}`, name: "", price_pkr: 0 }])
+        }
+      >
+        <Plus className="h-4 w-4" />
+        Add dish
+      </Button>
+      <p className="mt-3 text-[12.5px] text-slate-400">
+        Customers can order these (optional) while booking; the total is added to their JazzCash
+        payment. Existing bookings keep the prices they ordered at.
+      </p>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const [values, setValues] = useState<Record<string, string> | null>(null);
   const [error, setError] = useState("");
@@ -157,9 +245,16 @@ export default function SettingsPage() {
     setError("");
     setSaved(false);
     try {
+      // Drop unfinished food rows (no name or no price) before saving.
+      const cleaned = { ...values };
+      if (cleaned.food_menu) {
+        cleaned.food_menu = JSON.stringify(
+          parseMenu(cleaned.food_menu).filter((i) => i.name.trim() && i.price_pkr > 0)
+        );
+      }
       const data = await adminFetch<{ settings: Record<string, string> }>("/api/admin/settings", {
         method: "PUT",
-        body: JSON.stringify({ settings: values }),
+        body: JSON.stringify({ settings: cleaned }),
       });
       setValues(data.settings);
       setSaved(true);
@@ -227,6 +322,34 @@ export default function SettingsPage() {
                 {priceInput("price_evening_weekend_pkr")}
               </Field>
             </div>
+            <p className="mb-3 mt-6 text-[12.5px] font-semibold uppercase tracking-wide text-slate-400">
+              Packages
+            </p>
+            <div className="grid gap-5 sm:grid-cols-2">
+              <Field label="Two slots — weekday" help="Any two consecutive slots, Mon – Fri">
+                {priceInput("price_two_slots_pkr")}
+              </Field>
+              <Field label="Two slots — weekend" help="Any two consecutive slots, Sat & Sun">
+                {priceInput("price_two_slots_weekend_pkr")}
+              </Field>
+              <Field label="Full day — weekday" help="All three slots, Mon – Fri">
+                {priceInput("price_full_day_pkr")}
+              </Field>
+              <Field label="Full day — weekend" help="All three slots, Sat & Sun">
+                {priceInput("price_full_day_weekend_pkr")}
+              </Field>
+            </div>
+            <p className="mb-3 mt-6 text-[12.5px] font-semibold uppercase tracking-wide text-slate-400">
+              Add-ons
+            </p>
+            <div className="grid gap-5 sm:grid-cols-2">
+              <Field label="Bonfire" help="40 kg wood, one evening">
+                {priceInput("addon_bonfire_pkr")}
+              </Field>
+              <Field label="Private room" help="For resting & changing">
+                {priceInput("addon_room_pkr")}
+              </Field>
+            </div>
             <p className="mt-4 text-[12.5px] text-slate-400">
               Special prices for single dates (like Eid) are set on the Calendar page. They win over these.
             </p>
@@ -278,6 +401,25 @@ export default function SettingsPage() {
                 </Field>
               </div>
             </div>
+          </Card>
+
+          <Card className="p-6">
+            <div className="mb-5 flex items-center gap-3">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50">
+                <UtensilsCrossed className="h-5 w-5 text-amber-600" />
+              </span>
+              <div>
+                <h2 className="text-[15px] font-semibold text-slate-900">Food menu</h2>
+                <p className="text-[13px] text-slate-500">Homemade dishes customers can pre-order with their booking.</p>
+              </div>
+            </div>
+            <FoodMenuEditor
+              json={values["food_menu"]}
+              onChange={(json) => {
+                setSaved(false);
+                setValues((v) => ({ ...v, food_menu: json }));
+              }}
+            />
           </Card>
 
           <BlockedCustomersCard />

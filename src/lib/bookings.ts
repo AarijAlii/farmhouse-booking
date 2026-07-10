@@ -2,6 +2,7 @@ import { randomBytes } from "crypto";
 import { ApiError } from "@/lib/api";
 import { supabaseAdmin } from "@/lib/supabase";
 import type { Slot } from "@/lib/slots";
+import type { ExtrasSnapshot } from "@/lib/extras";
 
 export const ACTIVE_STATUSES = ["pending_payment", "payment_review", "confirmed"] as const;
 
@@ -10,6 +11,9 @@ export interface Booking {
   ref: string;
   booking_date: string;
   slot: Slot;
+  slots: Slot[] | null;
+  extras: Partial<ExtrasSnapshot> | null;
+  policies_accepted_at: string | null;
   customer_name: string;
   phone: string;
   adults: number;
@@ -79,6 +83,8 @@ export function publicBooking(b: Booking) {
     ref: b.ref,
     booking_date: b.booking_date,
     slot: b.slot,
+    slots: b.slots ?? [b.slot],
+    extras: b.extras ?? { addons: [], food: [], total_pkr: 0 },
     customer_name: b.customer_name,
     adults: b.adults,
     children: b.children,

@@ -1,0 +1,47 @@
+name: Nightly database backup
+
+# Dumps the Supabase Postgres database every night, encrypts it, and stores it
+# as a workflow artifact for 30 days. Restore instructions: docs/BACKUPS.md
+#
+# Required repository secrets:
+#   SUPABASE_DB_URL    — session-pooler connection string from the Supabase
+#                        dashboard (Connect -> Session pooler), with password
+#   BACKUP_PASSPHRASE  — any long random passphrase; needed to decrypt backups
+
+on:
+  schedule:
+    - cron: "30 22 * * *" # 3:30 am Pakistan time, daily
+  workflow_dispatch: {}
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Install PostgreSQL 17 client
+        run: |
+          sudo sh -c 'echo "deb https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/pgdg.gpg
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client-17
+
+      - name: Dump database
+        env:
+          DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          pg_dump "$DB_URL" --no-owner --no-privileges --schema=public | gzip > backup.sql.gz
+          ls -la backup.sql.gz
+
+      - name: Encrypt backup
+        env:
+          PASS: ${{ secrets.BACKUP_PASSPHRASE }}
+        run: |
+          openssl enc -aes-256-cbc -pbkdf2 -salt -pass env:PASS -in backup.sql.gz -out backup.sql.gz.enc
+          rm backup.sql.gz
+
+      - name: Store encrypted backup (30 days)
+        uses: actions/upload-artifact@v4
+        with:
+          name: db-backup-${{ github.run_number }}
+          path: backup.sql.gz.enc
+          retention-days: 30

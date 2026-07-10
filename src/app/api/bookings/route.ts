@@ -9,13 +9,14 @@ import {
   publicBooking,
   type Booking,
 } from "@/lib/bookings";
-import { SLOTS, isValidDateString, slotIsPast, todayPkt } from "@/lib/slots";
+import { SLOTS, isValidDateString, normalizeSlots, slotIsPast, todayPkt } from "@/lib/slots";
 import { getSettings, paymentInfo, pendingPaymentHours } from "@/lib/settings";
 import { supabaseAdmin } from "@/lib/supabase";
 import { clientIp, rateLimit } from "@/lib/ratelimit";
 import { encryptPii } from "@/lib/crypto";
 import { assertNotBlocked, assertNotOnCooldown, cnicFingerprint } from "@/lib/abuse";
-import { fetchOverrides, resolvePrice } from "@/lib/pricing";
+import { fetchOverrides, resolvePackagePrice } from "@/lib/pricing";
+import { buildExtras } from "@/lib/extras";
 
 const MAX_DAYS_AHEAD = 90;
 const MAX_BOOKINGS_PER_PHONE_PER_DAY = 3;
@@ -23,12 +24,15 @@ const MAX_BOOKINGS_PER_PHONE_PER_DAY = 3;
 const bodySchema = z
   .object({
     booking_date: z.string().refine(isValidDateString, "must be a valid YYYY-MM-DD date"),
-    slot: z.enum(SLOTS),
+    slots: z.array(z.enum(SLOTS)).min(1).max(3),
     customer_name: z.string().trim().min(2).max(100),
     phone: z.string().trim().min(10).max(16),
     cnic: z.string().trim().min(13).max(15),
     adults: z.number().int().min(1).max(100),
     children: z.number().int().min(0).max(100),
+    addons: z.array(z.string().max(30)).max(5).default([]),
+    food: z.array(z.object({ id: z.string().max(50), qty: z.number().int().min(1).max(20) }).strict()).max(15).default([]),
+    policies_accepted: z.literal(true, { error: "You must accept the farm policies to book" }),
   })
   .strict();
 
@@ -40,12 +44,17 @@ export const POST = handle(async (req) => {
   const cnic = normalizeCnic(body.cnic);
   const cnicHash = cnicFingerprint(cnic);
 
+  const slots = normalizeSlots(body.slots);
+  if (!slots) {
+    throw new ApiError(400, "Slots must be a single slot, two consecutive slots, or the full day");
+  }
+
   // Owner blocklist and repeat-no-show cool-down, before anything else.
   await assertNotBlocked(phone, cnicHash);
   await assertNotOnCooldown(phone, cnicHash);
 
-  if (slotIsPast(body.booking_date, body.slot)) {
-    throw new ApiError(400, "That slot is already in the past");
+  if (slots.some((s) => slotIsPast(body.booking_date, s))) {
+    throw new ApiError(400, "Part of that booking is already in the past — pick a later slot or date");
   }
   const horizon = new Date(`${todayPkt()}T00:00:00+05:00`);
   horizon.setUTCDate(horizon.getUTCDate() + MAX_DAYS_AHEAD);
@@ -55,13 +64,12 @@ export const POST = handle(async (req) => {
 
   const db = supabaseAdmin();
 
-  const { data: block } = await db
+  const { data: blocks } = await db
     .from("slot_blocks")
     .select("slot")
     .eq("block_date", body.booking_date)
-    .eq("slot", body.slot)
-    .maybeSingle();
-  if (block) throw new ApiError(409, "That slot is not available for booking");
+    .in("slot", slots);
+  if ((blocks ?? []).length > 0) throw new ApiError(409, "That time is not available for booking");
 
   await expireStalePending();
 
@@ -88,7 +96,9 @@ export const POST = handle(async (req) => {
 
   const settings = await getSettings();
   const overrides = await fetchOverrides(body.booking_date, body.booking_date);
-  const amount = resolvePrice(settings, overrides, body.booking_date, body.slot);
+  const packagePrice = resolvePackagePrice(settings, overrides, body.booking_date, slots);
+  const extras = buildExtras(settings, body.addons, body.food);
+  const amount = packagePrice + extras.total_pkr;
   const expiresAt = new Date(Date.now() + pendingPaymentHours(settings) * 3600_000).toISOString();
 
   const { data, error } = await db
@@ -96,7 +106,10 @@ export const POST = handle(async (req) => {
     .insert({
       ref: newRef(),
       booking_date: body.booking_date,
-      slot: body.slot,
+      slot: slots[0],
+      slots,
+      extras,
+      policies_accepted_at: new Date().toISOString(),
       customer_name: body.customer_name,
       phone,
       cnic: encryptPii(cnic),
@@ -111,8 +124,8 @@ export const POST = handle(async (req) => {
     .single();
 
   if (error) {
-    // 23505 = unique violation on the partial index: someone else holds the slot.
-    if (error.code === "23505") throw new ApiError(409, "Sorry, that slot was just taken. Please pick another.");
+    // 23505 = slot_holds primary key violation: someone else holds a slot.
+    if (error.code === "23505") throw new ApiError(409, "Sorry, that time was just taken. Please pick another.");
     throw new ApiError(500, "Could not create the booking");
   }
 

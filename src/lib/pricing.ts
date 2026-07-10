@@ -54,3 +54,34 @@ export function pricesForDate(
   for (const slot of SLOTS) out[slot] = resolvePrice(settings, overrides, date, slot);
   return out;
 }
+
+// Package price for a set of slots. Single slots use per-slot pricing
+// (including per-date specials); 2-slot and full-day packages use their own
+// weekday/weekend package prices.
+export function resolvePackagePrice(
+  settings: Record<string, string>,
+  overrides: Map<string, number>,
+  date: string,
+  slots: Slot[]
+): number {
+  if (slots.length === 1) return resolvePrice(settings, overrides, date, slots[0]);
+  const base = slots.length === 2 ? "price_two_slots" : "price_full_day";
+  if (isWeekend(date)) {
+    const weekend = settingPrice(settings, `${base}_weekend_pkr`);
+    if (weekend) return weekend;
+  }
+  const price = settingPrice(settings, `${base}_pkr`);
+  if (!price) throw new ApiError(500, "Package price is not configured");
+  return price;
+}
+
+export function packagePricesForDate(
+  settings: Record<string, string>,
+  overrides: Map<string, number>,
+  date: string
+): { two_slots: number; full_day: number } {
+  return {
+    two_slots: resolvePackagePrice(settings, overrides, date, ["morning", "afternoon"]),
+    full_day: resolvePackagePrice(settings, overrides, date, ["morning", "afternoon", "evening"]),
+  };
+}

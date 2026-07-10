@@ -219,11 +219,33 @@ export function Avatar({ name, className = "" }: { name: string; className?: str
   );
 }
 
+export interface BookingExtras {
+  addons?: { id: string; name: string; price_pkr: number }[];
+  food?: { id: string; name: string; price_pkr: number; qty: number }[];
+  total_pkr?: number;
+}
+
+export function slotsLabelUI(slots: string[] | null, fallback: string): string {
+  const list = slots && slots.length > 0 ? slots : [fallback];
+  if (list.length === 3) return "Full day";
+  return list.map((s) => SLOT_LABELS_UI[s] ?? s).join(" + ");
+}
+
+export function slotsTimeUI(slots: string[] | null, fallback: string): string {
+  const list = slots && slots.length > 0 ? slots : [fallback];
+  const first = SLOT_TIMES_UI[list[0]] ?? "";
+  const last = SLOT_TIMES_UI[list[list.length - 1]] ?? "";
+  return `${first.split(" – ")[0]} – ${last.split(" – ")[1]}`;
+}
+
 export interface AdminBooking {
   id: number;
   ref: string;
   booking_date: string;
   slot: string;
+  slots: string[] | null;
+  extras: BookingExtras | null;
+  policies_accepted_at: string | null;
   customer_name: string;
   phone: string;
   cnic: string;

@@ -18,12 +18,29 @@ interface PublicBooking {
   ref: string;
   booking_date: string;
   slot: SlotKey;
+  slots: SlotKey[];
+  extras: {
+    addons?: { id: string; name: string; price_pkr: number }[];
+    food?: { id: string; name: string; price_pkr: number; qty: number }[];
+    total_pkr?: number;
+  };
   customer_name: string;
   adults: number;
   children: number;
   status: string;
   amount_pkr: number | null;
   expires_at: string | null;
+}
+
+function slotsTitle(slots: SlotKey[]): string {
+  if (slots.length === 3) return "Full day";
+  return slots.map((s) => SLOT_META[s].label).join(" + ");
+}
+
+function slotsTimeRange(slots: SlotKey[]): string {
+  const first = SLOT_META[slots[0]].time.split(" – ")[0];
+  const last = SLOT_META[slots[slots.length - 1]].time.split(" – ")[1];
+  return `${first} – ${last}`;
 }
 
 interface LookupResult {
@@ -215,9 +232,9 @@ function StatusTracker() {
             </div>
             <dl className="mt-5 grid grid-cols-2 gap-4 text-[14px] sm:grid-cols-3">
               <div>
-                <dt className="text-[12px] text-stone-400">Slot</dt>
+                <dt className="text-[12px] text-stone-400">Time</dt>
                 <dd className="mt-0.5 font-medium text-stone-800">
-                  {meta.label} · {meta.time}
+                  {slotsTitle(b.slots ?? [b.slot])} · {slotsTimeRange(b.slots ?? [b.slot])}
                 </dd>
               </div>
               <div>
@@ -227,10 +244,27 @@ function StatusTracker() {
                 </dd>
               </div>
               <div>
-                <dt className="text-[12px] text-stone-400">Amount</dt>
+                <dt className="text-[12px] text-stone-400">Total</dt>
                 <dd className="mt-0.5 font-medium text-stone-800">{formatPkr(b.amount_pkr)}</dd>
               </div>
             </dl>
+            {((b.extras?.addons?.length ?? 0) > 0 || (b.extras?.food?.length ?? 0) > 0) && (
+              <div className="mt-4 rounded-2xl bg-[#F4F0E6] px-4 py-3">
+                <p className="text-[12px] font-medium uppercase tracking-wider text-stone-400">Your extras</p>
+                <ul className="mt-1 space-y-0.5 text-[13.5px] text-stone-700">
+                  {(b.extras?.addons ?? []).map((a) => (
+                    <li key={a.id}>
+                      {a.name} — {formatPkr(a.price_pkr)}
+                    </li>
+                  ))}
+                  {(b.extras?.food ?? []).map((f) => (
+                    <li key={f.id}>
+                      {f.name} × {f.qty} — {formatPkr(f.price_pkr * f.qty)}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
 
           {(b.status === "pending_payment" || b.status === "payment_review") && result?.payment && (

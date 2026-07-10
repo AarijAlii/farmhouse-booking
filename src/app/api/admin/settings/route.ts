@@ -10,7 +10,7 @@ export const GET = handle(async (req) => {
 });
 
 const bodySchema = z.object({
-  settings: z.record(z.enum(ALL_SETTING_KEYS), z.string().trim().min(1).max(1000)),
+  settings: z.record(z.enum(ALL_SETTING_KEYS), z.string().trim().min(1).max(5000)),
 });
 
 export const PUT = handle(async (req) => {
@@ -21,9 +21,17 @@ export const PUT = handle(async (req) => {
   if (entries.length === 0) throw new ApiError(400, "No settings provided");
 
   for (const [key, value] of entries) {
-    if (key.startsWith("price_") || key === "pending_payment_hours") {
+    if (key.startsWith("price_") || key.startsWith("addon_") || key === "pending_payment_hours") {
       const n = Number(value);
       if (!Number.isFinite(n) || n <= 0) throw new ApiError(400, `'${key}' must be a positive number`);
+    }
+    if (key === "food_menu") {
+      try {
+        const parsed = JSON.parse(value);
+        if (!Array.isArray(parsed)) throw new Error();
+      } catch {
+        throw new ApiError(400, "'food_menu' must be a JSON array of menu items");
+      }
     }
   }
 

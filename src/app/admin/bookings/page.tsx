@@ -13,12 +13,12 @@ import {
   INPUT_CLASS,
   PageHeader,
   SkeletonList,
-  SLOT_LABELS_UI,
-  SLOT_TIMES_UI,
   StatusBadge,
   blockCustomer,
   formatDate,
   formatPkr,
+  slotsLabelUI,
+  slotsTimeUI,
 } from "../ui";
 
 const FILTERS = [
@@ -86,6 +86,18 @@ function DetailPanel({ booking, onChanged }: { booking: AdminBooking; onChanged:
             <dd className="mt-0.5 text-slate-700">{booking.admin_note}</dd>
           </div>
         )}
+        <div className="col-span-2 sm:col-span-4">
+          <dt className="text-xs text-slate-400">Extras</dt>
+          <dd className="mt-0.5 text-slate-700">
+            {[
+              ...(booking.extras?.addons ?? []).map((a) => a.name),
+              ...(booking.extras?.food ?? []).map((f) => `${f.name} × ${f.qty}`),
+            ].join(", ") || "None"}
+            {booking.policies_accepted_at && (
+              <span className="ml-2 text-xs text-emerald-600">✓ policies accepted</span>
+            )}
+          </dd>
+        </div>
       </dl>
 
       {booking.proofs.length > 0 && (
@@ -264,7 +276,7 @@ export default function AllBookingsPage() {
                           {b.customer_name}
                         </span>
                         <span className="block truncate text-xs text-slate-400 md:hidden">
-                          {formatDate(b.booking_date)} · {SLOT_LABELS_UI[b.slot]}
+                          {formatDate(b.booking_date)} · {slotsLabelUI(b.slots, b.slot)}
                         </span>
                         <span className="hidden text-xs text-slate-400 md:block">{b.phone}</span>
                       </span>
@@ -272,7 +284,7 @@ export default function AllBookingsPage() {
                     <span className="hidden text-[13.5px] text-slate-600 md:block">
                       {formatDate(b.booking_date)}
                       <span className="block text-xs text-slate-400">
-                        {SLOT_LABELS_UI[b.slot]} · {SLOT_TIMES_UI[b.slot]}
+                        {slotsLabelUI(b.slots, b.slot)} · {slotsTimeUI(b.slots, b.slot)}
                       </span>
                     </span>
                     <span className="hidden text-[13.5px] text-slate-600 md:block">

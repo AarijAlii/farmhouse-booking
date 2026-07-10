@@ -23,11 +23,11 @@ import {
   ErrorBanner,
   PageHeader,
   SkeletonList,
-  SLOT_LABELS_UI,
-  SLOT_TIMES_UI,
   blockCustomer,
   formatDateLong,
   formatPkr,
+  slotsLabelUI,
+  slotsTimeUI,
 } from "./ui";
 
 function StatCard({
@@ -93,8 +93,8 @@ function ReviewCard({ booking, onDecided }: { booking: AdminBooking; onDecided: 
               )}
             </p>
             <p className="text-[13px] text-slate-500">
-              {formatDateLong(booking.booking_date)} · {SLOT_LABELS_UI[booking.slot]} (
-              {SLOT_TIMES_UI[booking.slot]})
+              {formatDateLong(booking.booking_date)} · {slotsLabelUI(booking.slots, booking.slot)} (
+              {slotsTimeUI(booking.slots, booking.slot)})
             </p>
           </div>
         </div>
@@ -140,6 +140,28 @@ function ReviewCard({ booking, onDecided }: { booking: AdminBooking; onDecided: 
               </div>
             </div>
           </dl>
+
+          {((booking.extras?.addons?.length ?? 0) > 0 || (booking.extras?.food?.length ?? 0) > 0) && (
+            <div className="mt-4 rounded-xl bg-slate-50 px-4 py-3">
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Extras ordered</p>
+              <ul className="mt-1.5 space-y-1 text-[13.5px] text-slate-700">
+                {(booking.extras?.addons ?? []).map((a) => (
+                  <li key={a.id} className="flex justify-between gap-4">
+                    <span>{a.name}</span>
+                    <span className="tabular-nums">{formatPkr(a.price_pkr)}</span>
+                  </li>
+                ))}
+                {(booking.extras?.food ?? []).map((f) => (
+                  <li key={f.id} className="flex justify-between gap-4">
+                    <span>
+                      {f.name} × {f.qty}
+                    </span>
+                    <span className="tabular-nums">{formatPkr(f.price_pkr * f.qty)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
           <ErrorBanner message={error} />
 

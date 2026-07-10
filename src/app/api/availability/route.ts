@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { ApiError, handle } from "@/lib/api";
-import { ACTIVE_STATUSES, expireStalePending } from "@/lib/bookings";
+import { expireStalePending } from "@/lib/bookings";
 import { SLOTS, type Slot, slotIsPast } from "@/lib/slots";
 import { supabaseAdmin } from "@/lib/supabase";
 import { getSettings } from "@/lib/settings";
-import { fetchOverrides, pricesForDate } from "@/lib/pricing";
+import { fetchOverrides, packagePricesForDate, pricesForDate } from "@/lib/pricing";
 
 type SlotStatus = "available" | "booked" | "blocked" | "past";
 
@@ -22,20 +22,17 @@ export const GET = handle(async (req) => {
   await expireStalePending();
 
   const db = supabaseAdmin();
-  const [bookings, blocks, settings, overrides] = await Promise.all([
-    db
-      .from("bookings")
-      .select("booking_date, slot")
-      .gte("booking_date", first)
-      .lte("booking_date", last)
-      .in("status", [...ACTIVE_STATUSES]),
+  // slot_holds is the physical truth of occupancy (multi-slot bookings hold
+  // one row per slot), maintained by a database trigger.
+  const [holds, blocks, settings, overrides] = await Promise.all([
+    db.from("slot_holds").select("booking_date, slot").gte("booking_date", first).lte("booking_date", last),
     db.from("slot_blocks").select("block_date, slot").gte("block_date", first).lte("block_date", last),
     getSettings(),
     fetchOverrides(first, last),
   ]);
-  if (bookings.error || blocks.error) throw new ApiError(500, "Could not load availability");
+  if (holds.error || blocks.error) throw new ApiError(500, "Could not load availability");
 
-  const booked = new Set(bookings.data.map((b) => `${b.booking_date}|${b.slot}`));
+  const booked = new Set(holds.data.map((b) => `${b.booking_date}|${b.slot}`));
   const blocked = new Set(blocks.data.map((b) => `${b.block_date}|${b.slot}`));
   const now = new Date();
 
@@ -48,7 +45,12 @@ export const GET = handle(async (req) => {
       else if (booked.has(`${date}|${slot}`)) slots[slot] = "booked";
       else slots[slot] = "available";
     }
-    return { date, slots, prices: pricesForDate(settings, overrides, date) };
+    return {
+      date,
+      slots,
+      prices: pricesForDate(settings, overrides, date),
+      package_prices: packagePricesForDate(settings, overrides, date),
+    };
   });
 
   return NextResponse.json(
